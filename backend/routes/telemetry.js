@@ -98,6 +98,47 @@ module.exports = function buildTelemetryRouter(io) {
       io.emit("telemetry", { missionId, point });
       res.status(201).json({ ok: true, computed });
 
+      // Forward telemetry to VYOMA AI Backend asynchronously (fire-and-forget)
+      if (process.env.VYOMA_AI_BASE_URL) {
+        const ragPayload = {
+          timestamp: new Date(timestamp).toISOString(),
+          flight_id: missionId,
+          flight_phase: "ASCENT", // Keep default phase since dashboard doesn't track it
+          mpu6050: {
+            ax: point.accel_x || 0,
+            ay: point.accel_y || 0,
+            az: point.accel_z || 0,
+            gx: point.gyro_x || 0,
+            gy: point.gyro_y || 0,
+            gz: point.gyro_z || 0
+          },
+          bmp280: {
+            pressure: b.pressure !== undefined && b.pressure !== null ? Number(b.pressure) : 0,
+            altitude: point.altitude || 0
+          },
+          gps: {
+            latitude: b.gps_lat || 0,
+            longitude: b.gps_lon || 0,
+            speed: point.velocity || 0,
+            fix: !!b.gps_sats
+          },
+          battery: {
+            voltage: b.battery || 0
+          },
+          comms: { status: "OK" },
+          recovery: { status: "ARMED" },
+          logging: { sd_status: "OK" }
+        };
+
+        fetch(`${process.env.VYOMA_AI_BASE_URL}/telemetry`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(ragPayload)
+        }).catch(err => {
+          console.error("VYOMA-AI Forwarding error:", err.message);
+        });
+      }
+
       // Alert checking logic
       const s = await getSettings();
       const nowMs = Date.now();

@@ -5,6 +5,7 @@ import { TelemetryChart } from '../components/TelemetryChart';
 import { Rocket3D } from '../components/Rocket3D';
 import { GasIndicator } from '../components/GasIndicator';
 import { MissionEvents } from '../components/MissionEvents';
+import { AIFlightMonitor } from '../components/AIFlightMonitor';
 import { Thermometer, Droplets, Mountain, Gauge, Battery, MapPin, Flame } from 'lucide-react';
 import { api } from '../api';
 
@@ -163,7 +164,7 @@ export function Dashboard() {
                   </div>
                   <div className="text-right">
                     <div className="text-[9px] text-gray-500 font-mono uppercase">DATA AGE</div>
-                    <div className="text-xs text-vyoma-primary font-mono">{((now - displayData.timestamp) / 1000).toFixed(1)} sec</div>
+                    <div className="text-xs text-vyoma-primary font-mono">{((now - Number(displayData.timestamp)) / 1000).toFixed(1)} sec</div>
                   </div>
                 </div>
               </>
@@ -403,8 +404,11 @@ export function Dashboard() {
         <TelemetryChart data={isActive ? history : []} dataKey={['gyro_x', 'gyro_y', 'gyro_z']} title="Angular Velocity (X,Y,Z)" colors={['#ef4444', '#22c55e', '#3b82f6']} />
       </div>
 
-      {/* Mission Events */}
-      <MissionEvents />
+      {/* Mission Events and AI Monitor */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <MissionEvents />
+        <AIFlightMonitor />
+      </div>
     </div>
   );
 }
