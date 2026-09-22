@@ -31,3 +31,12 @@ backend/data/*.sqlite-journal
 .env
 .env.*
 !.env.example
+
+# RAG / Python specifics
+__pycache__/
+*.pyc
+venv/
+.venv/
+VYOMA_RAG/.chromadb/
+VYOMA_RAG/scratch/
+

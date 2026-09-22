@@ -1,0 +1,28 @@
+# Telemetry Unit Configuration
+# IMPORTANT: All default units are marked ASSUMED - confirm with hardware/firmware team.
+
+units:
+  acceleration:
+    unit: "g"
+    note: "ASSUMED - confirm with hardware/firmware team (g vs m/s^2)"
+  gyroscope:
+    unit: "deg/s"
+    note: "ASSUMED - confirm with hardware/firmware team (deg/s vs rad/s)"
+  pressure:
+    unit: "hPa"
+    note: "ASSUMED - confirm with hardware/firmware team (hPa vs Pa)"
+  altitude:
+    unit: "m"
+    note: "ASSUMED - confirm with hardware/firmware team (metres vs feet)"
+  speed:
+    unit: "m/s"
+    note: "ASSUMED - confirm with hardware/firmware team (m/s vs knots or km/h)"
+  latitude:
+    unit: "deg"
+    note: "ASSUMED - confirm with hardware/firmware team (decimal degrees)"
+  longitude:
+    unit: "deg"
+    note: "ASSUMED - confirm with hardware/firmware team (decimal degrees)"
+  voltage:
+    unit: "V"
+    note: "ASSUMED - confirm with hardware/firmware team (volts)"

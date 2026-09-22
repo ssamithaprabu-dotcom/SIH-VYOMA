@@ -1,0 +1,99 @@
+# Telemetry Threshold Configuration
+# IMPORTANT: All numerical values are PLACEHOLDER - not validated until tested with hardware/flight-test data.
+
+faults:
+  GPS_LOSS:
+    sensor: "gps"
+    parameter: "fix"
+    condition: "fix == False or latitude == 0.0 or longitude == 0.0"
+    severity: "HIGH"
+    description: "GPS fix lost or invalid coordinates received during flight"
+    default_recommended_action: "Switch flight monitoring to barometric altitude source and check antenna connection"
+    requires_rag: true
+    persistence_window_ms: 1000  # Must persist for 1000ms
+    persistence_samples: 3       # OR 3 consecutive samples
+    cooldown_seconds: 10         # Do not re-trigger LLM for 10s unless severity changes
+    allowed_phases: ["PAD", "ASCENT", "COAST", "DESCENT", "LANDED"]
+
+  HIGH_ACCELERATION:
+    sensor: "mpu6050"
+    parameter: "acceleration"
+    condition: "magnitude > max_g"
+    severity: "CRITICAL"
+    description: "Abnormal acceleration magnitude detected"
+    default_recommended_action: "Verify structural integrity and monitor IMU orientation stability"
+    requires_rag: true
+    persistence_window_ms: 500
+    persistence_samples: 2
+    cooldown_seconds: 5
+    allowed_phases: ["PAD", "ASCENT", "COAST", "DESCENT"]
+    thresholds_by_phase:
+      PAD: 1.5         # PLACEHOLDER - not validated (g)
+      ASCENT: 15.0     # PLACEHOLDER - not validated (g)
+      COAST: 2.0       # PLACEHOLDER - not validated (g)
+      DESCENT: 5.0     # PLACEHOLDER - not validated (g)
+
+  LOW_BATTERY:
+    sensor: "battery"
+    parameter: "voltage"
+    condition: "voltage < 3.4" # PLACEHOLDER - not validated (V)
+    severity: "HIGH"
+    description: "Battery voltage critically low"
+    default_recommended_action: "Prepare ground station backup data logging"
+    requires_rag: true
+    persistence_window_ms: 2000
+    persistence_samples: 5
+    cooldown_seconds: 30
+    allowed_phases: ["PAD", "ASCENT", "COAST", "DESCENT", "LANDED"]
+
+  ALTITUDE_ANOMALY:
+    sensor: "bmp280"
+    parameter: "altitude"
+    condition: "baro_vs_gps_mismatch > 100 or altitude_rate_unrealistic"
+    severity: "HIGH"
+    description: "Barometric altitude disagrees significantly with GPS altitude or indicates unrealistic climb/descent rate"
+    default_recommended_action: "Cross-check barometric reference pressure and GPS satellite count"
+    requires_rag: true
+    persistence_window_ms: 1500
+    persistence_samples: 3
+    cooldown_seconds: 15
+    allowed_phases: ["ASCENT", "COAST", "DESCENT"]
+
+  VELOCITY_ANOMALY:
+    sensor: "derived"
+    parameter: "speed"
+    condition: "speed > max_expected_speed"
+    severity: "HIGH"
+    description: "Derived velocity exceeds realistic flight envelope"
+    default_recommended_action: "Inspect derived velocity calculation sources (GPS vs barometer)"
+    requires_rag: true
+    persistence_window_ms: 1000
+    persistence_samples: 3
+    cooldown_seconds: 15
+    allowed_phases: ["ASCENT", "COAST", "DESCENT"]
+
+  SENSOR_DISCONNECTED:
+    sensor: "system"
+    parameter: "telemetry_block"
+    condition: "sensor_block_missing == True"
+    severity: "CRITICAL"
+    description: "Sensor data payload missing completely from telemetry telemetry"
+    default_recommended_action: "Check hardware I2C/SPI wiring and sensor power delivery"
+    requires_rag: true
+    persistence_window_ms: 500
+    persistence_samples: 2
+    cooldown_seconds: 10
+    allowed_phases: ["PAD", "ASCENT", "COAST", "DESCENT", "LANDED"]
+
+  SENSOR_DATA_STALE:
+    sensor: "system"
+    parameter: "timestamp"
+    condition: "time_since_last_sample_ms > 3000"
+    severity: "MEDIUM"
+    description: "Telemetry stream data has stopped updating"
+    default_recommended_action: "Verify radio link (LoRa) RSSI and serial buffer status"
+    requires_rag: true
+    persistence_window_ms: 3000
+    persistence_samples: 1
+    cooldown_seconds: 15
+    allowed_phases: ["PAD", "ASCENT", "COAST", "DESCENT", "LANDED"]

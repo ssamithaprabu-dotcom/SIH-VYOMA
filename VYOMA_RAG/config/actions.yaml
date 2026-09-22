@@ -1,0 +1,19 @@
+# Whitelisted AI Suggested Actions
+# The LLM may ONLY suggest actions present in this whitelist or null.
+
+allowed_actions:
+  - id: "MARK_SENSOR_SUSPECT"
+    description: "Mark sensor data stream as questionable in dashboard telemetry display"
+    category: "ground_software"
+
+  - id: "SHOW_BACKUP_ALTITUDE_SOURCE"
+    description: "Switch dashboard primary altitude graph to secondary sensor display"
+    category: "ground_software"
+
+  - id: "REQUEST_OPERATOR_ACK"
+    description: "Trigger visual prompt requiring ground station operator acknowledgment"
+    category: "operator_interface"
+
+  - id: "REQUEST_RECALIBRATION_REMINDER"
+    description: "Log post-flight sensor recalibration request in ground station maintenance queue"
+    category: "ground_software"

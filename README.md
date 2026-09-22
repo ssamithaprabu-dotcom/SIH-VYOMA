@@ -106,3 +106,21 @@ the hardware later without touching the code.
   defaults so the project runs out of the box.
 - The dashboard and ESP8266 are meant to share a local Wi-Fi network (e.g. a
   phone hotspot at the launch site), not the open internet.
+
+## VYOMA_RAG & Local AI Architecture
+
+The system features a completely local, offline AI monitoring backend using **Ollama** and **ChromaDB**.
+
+### Architecture
+ESP8266 -> Node.js Backend -> VYOMA_RAG (Python) -> ChromaDB -> Ollama (llama3.2:1b) -> React Dashboard
+
+### How to Start the AI Backend
+1. **Ollama**: Ensure you have downloaded Ollama and installed the `llama3.2:1b` model.
+2. Start Ollama in the background (e.g. `ollama serve` or from your system tray).
+3. Start the RAG backend:
+   ```bash
+   cd VYOMA_RAG
+   pip install -r requirements.txt
+   python -m ai_backend.main
+   ```
+This will launch the AI telemetry processor on `http://localhost:8000`. The Dashboard backend will automatically forward telemetry to this port for AI analysis during the flight.

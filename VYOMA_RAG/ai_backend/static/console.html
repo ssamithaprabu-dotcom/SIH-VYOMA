@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VYOMA AI Backend - Development Test Console</title>
+    <!-- 
+      NOTE: This test console is a temporary development tool served at /console.
+      It is NOT the VYOMA dashboard and is designed to be easily deleted or replaced.
+    -->
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --card-bg: #161b22;
+            --border-color: #30363d;
+            --text-primary: #c9d1d9;
+            --text-secondary: #8b949e;
+            --accent-green: #238636;
+            --accent-red: #da3633;
+            --accent-yellow: #d29922;
+            --accent-blue: #58a6ff;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 20px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 20px;
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: bold;
+        }
+        .badge-online { background-color: rgba(35, 134, 54, 0.2); color: #3fb950; border: 1px solid #238636; }
+        .badge-offline { background-color: rgba(218, 54, 51, 0.2); color: #f85149; border: 1px solid #da3633; }
+        
+        .badge-pending { background-color: rgba(210, 153, 34, 0.2); color: #d29922; border: 1px solid #d29922; }
+        .badge-complete { background-color: rgba(35, 134, 54, 0.2); color: #3fb950; border: 1px solid #238636; }
+        .badge-fallback { background-color: rgba(218, 54, 51, 0.2); color: #f85149; border: 1px solid #da3633; }
+
+        .container {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 20px;
+        }
+
+        .panel {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 15px;
+        }
+
+        h2 { font-size: 1.1rem; margin-top: 0; color: var(--accent-blue); border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+
+        .telemetry-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            font-size: 0.9rem;
+        }
+
+        .metric-card {
+            background-color: #0d1117;
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid #21262d;
+        }
+
+        .metric-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; }
+        .metric-val { font-size: 1.1rem; font-weight: bold; margin-top: 2px; }
+
+        .alert-card {
+            background-color: #0d1117;
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--accent-yellow);
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 12px;
+            transition: all 0.3s ease;
+        }
+        .alert-card.CRITICAL { border-left-color: var(--accent-red); }
+
+        .alert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .alert-detail {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .ai-section {
+            background-color: #161b22;
+            border: 1px dashed var(--border-color);
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 8px;
+            font-size: 0.85rem;
+        }
+
+        .ai-causes { color: #58a6ff; margin: 4px 0; padding-left: 18px; }
+        .ai-recommendation { color: #3fb950; font-weight: bold; margin-top: 6px; }
+
+        .dev-notice {
+            background-color: rgba(210, 153, 34, 0.1);
+            border: 1px solid var(--accent-yellow);
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            color: var(--accent-yellow);
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div>
+            <h1 style="margin: 0; font-size: 1.5rem;">🚀 VYOMA AI Monitoring - Development Console</h1>
+            <div style="font-size: 0.85rem; color: var(--text-secondary);">Minimal Throwaway Test Console for AI Backend Verification</div>
+        </div>
+        <div>
+            Status: <span id="connStatus" class="badge badge-offline">DISCONNECTED</span>
+        </div>
+    </header>
+
+    <div class="dev-notice">
+        ⚠️ <strong>Developer Notice:</strong> This is a lightweight single-page test console served at <code>/console</code> to test live telemetry ingestion, fault detection, and WebSocket updates during AI backend development. It is <strong>NOT</strong> the VYOMA frontend dashboard.
+    </div>
+
+    <div class="container">
+        <!-- Live Telemetry Stream Panel -->
+        <div class="panel">
+            <h2>Live Telemetry Feed</h2>
+            <div class="telemetry-grid">
+                <div class="metric-card">
+                    <div class="metric-label">Flight Phase</div>
+                    <div class="metric-val" id="valPhase">--</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">GPS Fix</div>
+                    <div class="metric-val" id="valGpsFix">--</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Latitude</div>
+                    <div class="metric-val" id="valLat">--</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Longitude</div>
+                    <div class="metric-val" id="valLon">--</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Altitude (Baro)</div>
+                    <div class="metric-val" id="valAlt">--</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Accel Magnitude</div>
+                    <div class="metric-val" id="valAccel">--</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Battery Voltage</div>
+                    <div class="metric-val" id="valBat">--</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">GPS Speed</div>
+                    <div class="metric-val" id="valSpeed">--</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live AI Alerts Panel -->
+        <div class="panel">
+            <h2>Real-time AI Alerts & Analysis</h2>
+            <div id="alertsContainer">
+                <div style="color: var(--text-secondary); font-size: 0.9rem;">Waiting for incoming telemetry stream...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const wsUrl = `ws://${window.location.host}/ws/telemetry`;
+        let ws;
+        const alertMap = new Map();
+
+        function connectWebSocket() {
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                document.getElementById('connStatus').className = 'badge badge-online';
+                document.getElementById('connStatus').innerText = 'CONNECTED';
+            };
+
+            ws.onclose = () => {
+                document.getElementById('connStatus').className = 'badge badge-offline';
+                document.getElementById('connStatus').innerText = 'DISCONNECTED (Reconnecting...)';
+                setTimeout(connectWebSocket, 2000);
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const envelope = JSON.parse(event.data);
+                    handleEnvelope(envelope);
+                } catch (e) {
+                    console.error("Error parsing WS envelope:", e);
+                }
+            };
+        }
+
+        function handleEnvelope(envelope) {
+            const { type, data } = envelope;
+
+            if (type === 'telemetry') {
+                updateTelemetryDisplay(data);
+            } else if (type === 'ai_alert' || type === 'ai_alert_update') {
+                renderOrUpdateAlert(data);
+            }
+        }
+
+        function updateTelemetryDisplay(t) {
+            document.getElementById('valPhase').innerText = t.flight_phase || '--';
+            if (t.gps) {
+                document.getElementById('valGpsFix').innerText = t.gps.fix ? 'LOCK' : 'LOST';
+                document.getElementById('valGpsFix').style.color = t.gps.fix ? '#3fb950' : '#f85149';
+                document.getElementById('valLat').innerText = t.gps.latitude ? t.gps.latitude.toFixed(4) : '0.0000';
+                document.getElementById('valLon').innerText = t.gps.longitude ? t.gps.longitude.toFixed(4) : '0.0000';
+                document.getElementById('valSpeed').innerText = (t.gps.speed || 0).toFixed(1) + ' m/s';
+            }
+            if (t.bmp280) {
+                document.getElementById('valAlt').innerText = (t.bmp280.altitude || 0).toFixed(1) + ' m';
+            }
+            if (t.mpu6050) {
+                const mag = Math.sqrt(t.mpu6050.ax**2 + t.mpu6050.ay**2 + t.mpu6050.az**2);
+                document.getElementById('valAccel').innerText = mag.toFixed(2) + ' g';
+            }
+            if (t.battery) {
+                document.getElementById('valBat').innerText = (t.battery.voltage || 0).toFixed(2) + ' V';
+            }
+        }
+
+        function renderOrUpdateAlert(alert) {
+            alertMap.set(alert.alert_id, alert);
+            const container = document.getElementById('alertsContainer');
+
+            let card = document.getElementById(`alert-${alert.alert_id}`);
+            if (!card) {
+                card = document.createElement('div');
+                card.id = `alert-${alert.alert_id}`;
+                card.className = `alert-card ${alert.severity}`;
+                container.prepend(card);
+            }
+
+            const statusBadgeClass = alert.ai_status === 'PENDING' ? 'badge-pending' : (alert.ai_status === 'COMPLETE' ? 'badge-complete' : 'badge-fallback');
+            const causesHtml = (alert.possible_causes || []).map(c => `<li>${c}</li>`).join('');
+
+            card.innerHTML = `
+                <div class="alert-header">
+                    <span>⚠️ ${alert.fault} (${alert.sensor.toUpperCase()})</span>
+                    <span>
+                        <span class="badge ${statusBadgeClass}">${alert.ai_status}</span>
+                        <span style="font-size: 0.75rem; margin-left: 5px;">Conf: ${(alert.confidence * 100).toFixed(0)}% (heuristic)</span>
+                    </span>
+                </div>
+                <div class="alert-detail">
+                    <strong>Evidence:</strong> ${alert.measured_evidence}<br>
+                    <strong>Flight Phase:</strong> ${alert.flight_phase} | <strong>Current Value:</strong> ${alert.current_value} ${alert.unit}
+                </div>
+                <div class="ai-section">
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); font-weight: bold;">AI INFERENCE & CAUSES:</div>
+                    <ul class="ai-causes">${causesHtml}</ul>
+                    <div class="ai-recommendation">💡 Recommended Action: ${alert.recommended_action}</div>
+                    ${alert.suggested_action_id ? `<div style="font-size: 0.75rem; color: var(--accent-blue); margin-top: 4px;">Suggested Action ID: <code>${alert.suggested_action_id}</code></div>` : ''}
+                    ${alert.sources && alert.sources.length ? `<div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 4px;">Sources: ${alert.sources.join(', ')}</div>` : ''}
+                </div>
+            `;
+        }
+
+        connectWebSocket();
+    </script>
+</body>
+</html>
