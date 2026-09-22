@@ -1,101 +1,94 @@
 const express = require("express");
-const PDFDocument = require("pdfkit");
 const { db } = require("../database");
 const { requireAuth } = require("../middleware/auth");
 
 const router = express.Router();
 router.use(requireAuth);
 
-router.get("/:missionId/pdf", (req, res) => {
+router.get("/:missionId/data", async (req, res) => {
   const missionId = req.params.missionId;
   
-  db.get("SELECT * FROM missions WHERE id = ?", [missionId], (err, mission) => {
-    if (err || !mission) return res.status(404).json({ error: "Mission not found." });
+  try {
+    const missionInfo = await db.get("SELECT * FROM missions WHERE id = ?", [missionId]);
+    if (!missionInfo) return res.status(404).json({ error: "Mission not found." });
 
-    db.all("SELECT * FROM telemetry WHERE mission_id = ? ORDER BY timestamp ASC", [missionId], (err, points) => {
-      
-      db.get(`SELECT 
+    const telemetry = await db.all("SELECT * FROM telemetry WHERE mission_id = ? ORDER BY timestamp ASC", [missionId]);
+    const missionEvents = await db.all("SELECT * FROM mission_events WHERE mission_id = ? ORDER BY timestamp ASC", [missionId]);
+    const settingsRow = await db.get("SELECT setting_value FROM global_settings WHERE setting_key = 'app_settings' ORDER BY id DESC LIMIT 1");
+    let settings = {};
+    if (settingsRow && settingsRow.setting_value) {
+      try { settings = JSON.parse(settingsRow.setting_value); } catch(e){}
+    }
+
+    const statsQuery = `SELECT 
         MAX(altitude) as maxAltitude, 
+        MIN(altitude) as minAltitude,
         MAX(ABS(velocity)) as maxVelocity,
-        MAX(MAX(ABS(accel_x), ABS(accel_y), ABS(accel_z))) as maxAccel,
-        MAX(MAX(ABS(gyro_x), ABS(gyro_y), ABS(gyro_z))) as maxGyro,
+        MAX(GREATEST(IFNULL(ABS(accel_x), 0), IFNULL(ABS(accel_y), 0), IFNULL(ABS(accel_z), 0))) as maxAccel,
+        MAX(GREATEST(IFNULL(ABS(gyro_x), 0), IFNULL(ABS(gyro_y), 0), IFNULL(ABS(gyro_z), 0))) as maxGyro,
         MIN(temperature) as minTemp, MAX(temperature) as maxTemp,
         MIN(humidity) as minHum, MAX(humidity) as maxHum,
-        MIN(mq9) as minMq09, MAX(mq9) as maxMq09,
+        MIN(mq09) as minMq09, MAX(mq09) as maxMq09,
         MIN(mq135) as minMq135, MAX(mq135) as maxMq135
-        FROM telemetry WHERE mission_id = ?`, [missionId], (err, stats) => {
+        FROM telemetry WHERE mission_id = ?`;
         
-        mission.maxAltitude = stats?.maxAltitude || 0;
-        mission.maxVelocity = stats?.maxVelocity || 0;
-        mission.maxAccel = stats?.maxAccel || 0;
-        mission.maxGyro = stats?.maxGyro || 0;
-        
-        db.all("SELECT * FROM alerts WHERE mission_id = ? ORDER BY timestamp ASC", [missionId], (err, alertsRow) => {
-          const alerts = alertsRow || [];
-          const flameCount = alerts.filter(a => a.sensor === 'Flame').length;
+    const stats = await db.get(statsQuery, [missionId]);
 
-        const durationSec = points.length > 0 
-          ? (new Date(points[points.length-1].timestamp).getTime() - new Date(points[0].timestamp).getTime()) / 1000
-          : 0;
+    const durationSec = telemetry.length > 0 
+      ? (new Date(telemetry[telemetry.length-1].timestamp).getTime() - new Date(telemetry[0].timestamp).getTime()) / 1000
+      : 0;
 
-        const doc = new PDFDocument({ margin: 50 });
-        res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Disposition", `attachment; filename="${mission.name.replace(/\s+/g, "_")}_report.pdf"`);
-        doc.pipe(res);
+    const flightSummary = {
+      maxAltitude: stats?.maxAltitude || 0,
+      minAltitude: stats?.minAltitude || 0,
+      currentAltitude: telemetry.length > 0 ? telemetry[telemetry.length-1].altitude : 0,
+      maxVelocity: stats?.maxVelocity || 0,
+      currentVelocity: telemetry.length > 0 ? telemetry[telemetry.length-1].velocity : 0,
+      maxAccel: stats?.maxAccel || 0,
+      maxGyro: stats?.maxGyro || 0,
+      flightTime: durationSec
+    };
 
-        doc.fontSize(20).text("VYOMA Flight Report", { align: "left" });
-        doc.moveDown(0.3);
-        doc.fontSize(11).fillColor("#555").text("Open reusable rocket/CanSat avionics kit - SIH26226");
-        doc.fillColor("#000").moveDown(1);
+    const environmentalData = {
+      maxTemp: stats?.maxTemp || null,
+      minTemp: stats?.minTemp || null,
+      maxHum: stats?.maxHum || null,
+      minHum: stats?.minHum || null,
+    };
 
-        doc.fontSize(14).text(`Mission: ${mission.name}`);
-        doc.fontSize(10).text(`ID: ${mission.id}   |   Operator: ${mission.operator || 'Unknown'}`);
-        doc.text(`Started: ${new Date(mission.start_time).toLocaleString()}`);
-        doc.text(`Duration: ${durationSec.toFixed(1)} s   |   Final Status: ${mission.status}`);
-        doc.moveDown(1);
+    const gasData = {
+      mq09_max: stats?.maxMq09 || null,
+      mq09_min: stats?.minMq09 || null,
+      mq135_max: stats?.maxMq135 || null,
+      mq135_min: stats?.minMq135 || null
+    };
 
-        const rows = [
-          ["Max altitude", `${mission.maxAltitude.toFixed(2)} m`],
-          ["Max velocity", `${mission.maxVelocity.toFixed(2)} m/s`],
-          ["Max acceleration", `${mission.maxAccel.toFixed(2)} g`],
-          ["Max angular velocity", `${mission.maxGyro.toFixed(2)} °/s`],
-          ["Temperature Range", `${stats?.minTemp || '--'} °C to ${stats?.maxTemp || '--'} °C`],
-          ["Humidity Range", `${stats?.minHum || '--'} % to ${stats?.maxHum || '--'} %`],
-          ["MQ-09 Range", `${stats?.minMq09 || '--'} to ${stats?.maxMq09 || '--'}`],
-          ["MQ-135 Range", `${stats?.minMq135 || '--'} to ${stats?.maxMq135 || '--'}`],
-          ["Flame Events Detected", String(flameCount)],
-          ["Telemetry points logged", String(points.length)]
-        ];
+    const flameCount = missionEvents.filter(a => a.sensor === 'Flame').length;
+    const flameData = {
+      events: flameCount,
+      firstDetection: flameCount > 0 ? missionEvents.find(a => a.sensor === 'Flame').timestamp : null,
+      lastDetection: flameCount > 0 ? [...missionEvents].reverse().find(a => a.sensor === 'Flame').timestamp : null
+    };
 
-        doc.fontSize(12).text("Flight summary", { underline: true });
-        doc.moveDown(0.5);
-        rows.forEach(([label, value]) => {
-          doc.fontSize(10).text(`${label}:`, { continued: true, width: 250 }).text(`  ${value}`);
-        });
+    // Construct the single payload
+    const missionReport = {
+      missionInfo,
+      flightSummary,
+      environmentalData,
+      gasData,
+      flameData,
+      sensorStatus: settings.sensors || {},
+      mode: settings.mode || 'LIVE',
+      missionEvents,
+      telemetry
+    };
 
-        doc.moveDown(1);
-        doc.fontSize(12).text("Mission Events Timeline", { underline: true });
-        doc.moveDown(0.5);
-        if (alerts.length === 0) {
-          doc.fontSize(10).text("No critical events recorded during this mission.");
-        } else {
-          alerts.forEach(a => {
-            const time = new Date(a.timestamp).toLocaleTimeString();
-            doc.fontSize(10).text(`${time} - [${a.severity}] ${a.sensor}: ${a.message}`);
-          });
-        }
+    res.json(missionReport);
 
-        doc.moveDown(2);
-        doc.fontSize(9).fillColor("#777").text(
-          "Note: altitude and velocity are estimated by integrating IMU acceleration " +
-            "until BMP280 barometric altitude is added in Phase 2. Detailed visual telemetry graphs can be viewed natively in the VYOMA Mission Archive Dashboard."
-        );
-
-        doc.end();
-        });
-      });
-    });
-  });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Database error fetching report." });
+  }
 });
 
 module.exports = router;

@@ -138,32 +138,228 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* Sensor Cards Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-4">
-        {s.dht22 && (
-          <>
-            <SensorCard title="Temperature" value={displayData?.temperature} unit="°C" icon={<Thermometer className="w-5 h-5"/>} />
-            <SensorCard title="Humidity" value={displayData?.humidity} unit="%" icon={<Droplets className="w-5 h-5"/>} />
-          </>
-        )}
-        {s.bmp280 && (
-          <SensorCard title="Baro Altitude" value={displayData?.altitude !== null ? displayData?.altitude : undefined} unit="m" icon={<Mountain className="w-5 h-5"/>} status={!rocketConnected ? 'unavailable' : 'normal'} />
-        )}
-        {s.gps && (
-          <SensorCard title="GPS Altitude" value={displayData?.gps_lat !== null ? displayData?.altitude : undefined} unit="m" icon={<Mountain className="w-5 h-5"/>} status={!rocketConnected ? 'unavailable' : 'normal'} />
-        )}
-        {(!s.bmp280 && !s.gps && s.mpu6050) && (
-          <SensorCard title="Altitude" value={undefined} unit="m" icon={<Mountain className="w-5 h-5"/>} status={!rocketConnected ? 'unavailable' : 'unavailable'} subLabel="SENSOR UNAVAILABLE" />
-        )}
-        {s.mpu6050 && (
-          <SensorCard title="Vertical Velocity" value={displayData?.velocity !== null ? displayData?.velocity : undefined} unit="m/s" icon={<Gauge className="w-5 h-5"/>} />
-        )}
-        {s.battery && (
-          <SensorCard title="Battery" value={displayData?.battery} unit="V" icon={<Battery className="w-5 h-5"/>} />
-        )}
-        {s.gps && (
-          <SensorCard title="GPS Sats" value={displayData?.gps_sats} icon={<MapPin className="w-5 h-5"/>} />
-        )}
+      {/* LIVE TELEMETRY */}
+      <div>
+        <h4 className="text-lg font-bold text-white tracking-widest uppercase mb-4 border-b border-white/10 pb-2">LIVE TELEMETRY</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          
+          {/* TIMESTAMP CARD */}
+          <div className="glass-panel p-5 flex flex-col justify-between h-32 border border-vyoma-primary/20">
+            <h3 className="text-[11px] text-gray-400 font-mono tracking-wider uppercase mb-1">TELEMETRY TIMESTAMP</h3>
+            {!isActive || displayData?.timestamp == null ? (
+              <>
+                <div className="text-2xl font-bold font-mono tracking-tight text-gray-500">--:--:--</div>
+                <div className="text-[10px] text-gray-500 font-mono mt-auto uppercase">NO TELEMETRY</div>
+              </>
+            ) : (
+              <>
+                <div className="text-2xl font-bold font-mono tracking-tight text-white">
+                  {new Date(displayData.timestamp).toISOString().substr(11, 12)}
+                </div>
+                <div className="flex justify-between items-end mt-auto">
+                  <div>
+                    <div className="text-[9px] text-gray-500 font-mono uppercase">LAST PACKET</div>
+                    <div className="text-xs text-gray-300 font-mono">{new Date(displayData.timestamp).toISOString().substr(11, 8)}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[9px] text-gray-500 font-mono uppercase">DATA AGE</div>
+                    <div className="text-xs text-vyoma-primary font-mono">{((now - displayData.timestamp) / 1000).toFixed(1)} sec</div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* TEMPERATURE CARD */}
+          {s.dht22 && (
+            <div className={`glass-panel p-5 flex flex-col justify-between h-32 border ${!isActive || displayData?.temperature == null ? 'border-gray-800' : 'border-vyoma-primary/20'}`}>
+              <div className="flex justify-between items-start">
+                <h3 className="text-[11px] text-gray-400 font-mono tracking-wider uppercase">TEMPERATURE</h3>
+                <Thermometer className={`w-5 h-5 ${!isActive || displayData?.temperature == null ? 'text-gray-600' : 'text-vyoma-success'}`} />
+              </div>
+              {!isActive || displayData?.temperature == null ? (
+                <div className="mt-auto">
+                  <div className="text-2xl font-bold font-mono tracking-tight text-gray-500">
+                    -- <span className="text-xs text-gray-600 ml-1">°C</span>
+                  </div>
+                  <div className="text-[9px] text-gray-500 font-mono mt-1 tracking-wider uppercase">SENSOR UNAVAILABLE</div>
+                </div>
+              ) : (
+                <div className="mt-auto">
+                  <div className="text-2xl font-bold font-mono tracking-tight text-vyoma-success">
+                    {displayData.temperature.toFixed(1)} <span className="text-xs text-gray-400 ml-1">°C</span>
+                  </div>
+                  <div className="text-[9px] text-vyoma-success font-mono mt-1 tracking-wider uppercase">NORMAL</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* HUMIDITY CARD */}
+          {s.dht22 && (
+            <div className={`glass-panel p-5 flex flex-col justify-between h-32 border ${!isActive || displayData?.humidity == null ? 'border-gray-800' : 'border-vyoma-primary/20'}`}>
+              <div className="flex justify-between items-start">
+                <h3 className="text-[11px] text-gray-400 font-mono tracking-wider uppercase">HUMIDITY</h3>
+                <Droplets className={`w-5 h-5 ${!isActive || displayData?.humidity == null ? 'text-gray-600' : 'text-vyoma-success'}`} />
+              </div>
+              {!isActive || displayData?.humidity == null ? (
+                <div className="mt-auto">
+                  <div className="text-2xl font-bold font-mono tracking-tight text-gray-500">
+                    -- <span className="text-xs text-gray-600 ml-1">%</span>
+                  </div>
+                  <div className="text-[9px] text-gray-500 font-mono mt-1 tracking-wider uppercase">SENSOR UNAVAILABLE</div>
+                </div>
+              ) : (
+                <div className="mt-auto">
+                  <div className="text-2xl font-bold font-mono tracking-tight text-vyoma-success">
+                    {displayData.humidity.toFixed(1)} <span className="text-xs text-gray-400 ml-1">%</span>
+                  </div>
+                  <div className="text-[9px] text-vyoma-success font-mono mt-1 tracking-wider uppercase">NORMAL</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ALTITUDE CARD */}
+          {(s.bmp280 || s.gps) && (
+            <div className={`glass-panel p-5 flex flex-col justify-between h-32 border ${!isActive || displayData?.altitude == null ? 'border-gray-800' : 'border-vyoma-primary/20'}`}>
+              <div className="flex justify-between items-start">
+                <h3 className="text-[11px] text-gray-400 font-mono tracking-wider uppercase">{s.bmp280 ? 'ALTITUDE' : 'GPS ALTITUDE'}</h3>
+                <Mountain className={`w-5 h-5 ${!isActive || displayData?.altitude == null ? 'text-gray-600' : 'text-vyoma-success'}`} />
+              </div>
+              {!isActive || displayData?.altitude == null ? (
+                <div className="mt-auto">
+                  <div className="text-2xl font-bold font-mono tracking-tight text-gray-500">
+                    -- <span className="text-xs text-gray-600 ml-1">m</span>
+                  </div>
+                  <div className="text-[9px] text-gray-500 font-mono mt-1 tracking-wider uppercase">SENSOR UNAVAILABLE</div>
+                </div>
+              ) : (
+                <div className="mt-auto">
+                  <div className="text-2xl font-bold font-mono tracking-tight text-vyoma-success">
+                    {displayData.altitude.toFixed(1)} <span className="text-xs text-gray-400 ml-1">m</span>
+                  </div>
+                  <div className="text-[9px] text-gray-500 font-mono mt-1 tracking-wider uppercase">{s.bmp280 ? 'BAROMETRIC' : 'GPS'}</div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          
+          {/* MQ-09 CARD */}
+          {s.mq09 && (
+            <div className={`glass-panel p-5 flex flex-col justify-between h-32 border ${!isActive || displayData?.mq09 == null ? 'border-gray-800' : 'border-vyoma-primary/20'}`}>
+              <h3 className="text-[11px] text-gray-400 font-mono tracking-wider uppercase">GAS CONCENTRATION <br/> MQ-09</h3>
+              {!isActive || displayData?.mq09 == null ? (
+                <div className="flex justify-between items-end mt-auto">
+                  <div>
+                    <div className="text-2xl font-bold font-mono tracking-tight text-gray-500">
+                      -- <span className="text-xs text-gray-600 ml-1">ADC</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[9px] text-gray-500 font-mono uppercase">STATUS</div>
+                    <div className="text-xs font-bold font-mono tracking-wider text-gray-500">NO DATA</div>
+                  </div>
+                </div>
+              ) : (
+                (() => {
+                  const val = displayData.mq09;
+                  let color = 'text-vyoma-success';
+                  let status = 'NORMAL';
+                  if (val >= mq09Thresh.critical) { color = 'text-vyoma-critical'; status = 'CRITICAL'; }
+                  else if (val >= mq09Thresh.high) { color = 'text-vyoma-warning'; status = 'HIGH'; }
+                  else if (val < mq09Thresh.normal && val >= mq09Thresh.low) { color = 'text-green-400'; status = 'LOW'; }
+                  
+                  return (
+                    <div className="flex justify-between items-end mt-auto">
+                      <div>
+                        <div className={`text-2xl font-bold font-mono tracking-tight ${color}`}>
+                          {val.toFixed(0)} <span className="text-xs text-gray-400 ml-1">ADC</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[9px] text-gray-500 font-mono uppercase">STATUS</div>
+                        <div className={`text-xs font-bold font-mono tracking-wider ${color}`}>{status}</div>
+                      </div>
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+          )}
+
+          {/* MQ-135 CARD */}
+          {s.mq135 && (
+            <div className={`glass-panel p-5 flex flex-col justify-between h-32 border ${!isActive || displayData?.mq135 == null ? 'border-gray-800' : 'border-vyoma-primary/20'}`}>
+              <h3 className="text-[11px] text-gray-400 font-mono tracking-wider uppercase">GAS CONCENTRATION <br/> MQ-135</h3>
+              {!isActive || displayData?.mq135 == null ? (
+                <div className="flex justify-between items-end mt-auto">
+                  <div>
+                    <div className="text-2xl font-bold font-mono tracking-tight text-gray-500">
+                      -- <span className="text-xs text-gray-600 ml-1">ADC</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[9px] text-gray-500 font-mono uppercase">STATUS</div>
+                    <div className="text-xs font-bold font-mono tracking-wider text-gray-500">NO DATA</div>
+                  </div>
+                </div>
+              ) : (
+                (() => {
+                  const val = displayData.mq135;
+                  let color = 'text-vyoma-success';
+                  let status = 'NORMAL';
+                  if (val >= mq135Thresh.critical) { color = 'text-vyoma-critical'; status = 'CRITICAL'; }
+                  else if (val >= mq135Thresh.high) { color = 'text-vyoma-warning'; status = 'HIGH'; }
+                  else if (val < mq135Thresh.normal && val >= mq135Thresh.low) { color = 'text-green-400'; status = 'LOW'; }
+                  
+                  return (
+                    <div className="flex justify-between items-end mt-auto">
+                      <div>
+                        <div className={`text-2xl font-bold font-mono tracking-tight ${color}`}>
+                          {val.toFixed(0)} <span className="text-xs text-gray-400 ml-1">ADC</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[9px] text-gray-500 font-mono uppercase">STATUS</div>
+                        <div className={`text-xs font-bold font-mono tracking-wider ${color}`}>{status}</div>
+                      </div>
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+          )}
+
+          {/* FLAME STATUS CARD */}
+          {s.flame && (
+            <div className={`glass-panel p-5 flex flex-col justify-between h-32 border ${!isActive ? 'border-gray-800' : (displayData?.flame === 1 ? 'border-vyoma-critical' : 'border-vyoma-primary/20')}`}>
+              <h3 className="text-[11px] text-gray-400 font-mono tracking-wider uppercase">FLAME STATUS</h3>
+              {!isActive ? (
+                <div className="mt-auto">
+                  <div className="text-xl font-bold font-mono tracking-tight text-gray-500 flex items-center gap-2">
+                    SENSOR UNAVAILABLE
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-auto">
+                  {displayData?.flame === 1 ? (
+                    <div className="text-xl font-bold font-mono tracking-tight text-vyoma-critical flex items-center gap-2">
+                      🔴 FLAME DETECTED
+                    </div>
+                  ) : (
+                    <div className="text-xl font-bold font-mono tracking-tight text-vyoma-success flex items-center gap-2">
+                      🟢 CLEAR
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main Grid: 3D Rocket + Gas/Orientation */}

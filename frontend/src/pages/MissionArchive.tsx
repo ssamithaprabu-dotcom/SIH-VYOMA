@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { api } from '../api';
 import { Archive, Download, Eye, X, Search, Filter } from 'lucide-react';
 import { TelemetryChart } from '../components/TelemetryChart';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 export function MissionArchive() {
   const [missions, setMissions] = useState<any[]>([]);
@@ -12,10 +14,9 @@ export function MissionArchive() {
 
   // Modal State
   const [selectedMission, setSelectedMission] = useState<any | null>(null);
-  const [missionDetails, setMissionDetails] = useState<any | null>(null);
-  const [missionTelemetry, setMissionTelemetry] = useState<any[]>([]);
-  const [missionAlerts, setMissionAlerts] = useState<any[]>([]);
+  const [missionReport, setMissionReport] = useState<any | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchMissions();
@@ -32,39 +33,63 @@ export function MissionArchive() {
     }
   };
 
-  const handleDownloadPdf = async (missionId: number, missionName: string) => {
+  const handleDownloadPdf = async (missionName: string) => {
+    if (!reportRef.current) return;
+    
+    // We create a loading overlay or just wait
+    const originalStyle = reportRef.current.style.cssText;
+    
     try {
-      const blob = await api.getBlob(`/reports/${missionId}/pdf`);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${missionName.replace(/\s+/g, '_')}_report.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      // Temporarily adjust styles for PDF generation if needed
+      reportRef.current.style.backgroundColor = '#0b0f19'; // vyoma-dark
+      reportRef.current.style.padding = '20px';
+      
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2, // Higher quality
+        backgroundColor: '#0b0f19',
+        logging: false
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      let heightLeft = pdfHeight;
+      let position = 0;
+      
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+      heightLeft -= pdf.internal.pageSize.getHeight();
+      
+      while (heightLeft >= 0) {
+        position = heightLeft - pdfHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+        heightLeft -= pdf.internal.pageSize.getHeight();
+      }
+      
+      pdf.save(`${missionName.replace(/\s+/g, '_')}_report.pdf`);
     } catch (err) {
-      console.error('Failed to download PDF:', err);
+      console.error('Failed to generate PDF:', err);
       alert('Failed to generate PDF. Please try again.');
+    } finally {
+      if (reportRef.current) reportRef.current.style.cssText = originalStyle;
     }
   };
 
   const openMissionView = async (mission: any) => {
     setSelectedMission(mission);
     setLoadingDetails(true);
-    setMissionDetails(null);
-    setMissionTelemetry([]);
-    setMissionAlerts([]);
+    setMissionReport(null);
     
     try {
-      const [details, telemetry, alerts] = await Promise.all([
-        api.get(`/missions/${mission.id}/details`),
-        api.get(`/telemetry/history?missionId=${mission.id}&limit=5000`),
-        api.get(`/missions/${mission.id}/alerts`)
-      ]);
-      setMissionDetails(details);
-      setMissionTelemetry(telemetry);
-      setMissionAlerts(alerts);
+      const report = await api.get(`/reports/${mission.id}/data`);
+      setMissionReport(report);
     } catch (e) {
       console.error(e);
     } finally {
@@ -74,9 +99,7 @@ export function MissionArchive() {
 
   const closeMissionView = () => {
     setSelectedMission(null);
-    setMissionDetails(null);
-    setMissionTelemetry([]);
-    setMissionAlerts([]);
+    setMissionReport(null);
   };
 
   const filteredMissions = missions
@@ -239,12 +262,6 @@ export function MissionArchive() {
                         >
                           <Eye className="w-3.5 h-3.5" /> VIEW
                         </button>
-                        <button 
-                          onClick={() => handleDownloadPdf(m.id, m.name)}
-                          className="px-3 py-1.5 bg-gray-800 text-gray-300 hover:bg-white/20 rounded text-[10px] font-mono font-bold tracking-widest uppercase transition-colors flex items-center gap-1.5"
-                        >
-                          <Download className="w-3.5 h-3.5" /> PDF
-                        </button>
                       </div>
                     </td>
                   </tr>
@@ -264,16 +281,16 @@ export function MissionArchive() {
               <div>
                 <h3 className="text-xl font-bold text-white tracking-widest mb-1">{selectedMission.name}</h3>
                 <div className="text-xs text-gray-400 font-mono tracking-wider">
-                  MISSION OVERVIEW • {selectedMission.id} • {selectedMission.operator || 'Unknown'} • {new Date(selectedMission.start_time).toLocaleString()}
-                  {selectedMission.end_time && ` to ${new Date(selectedMission.end_time).toLocaleTimeString()}`}
+                  REPORT PREVIEW • {selectedMission.id}
                 </div>
               </div>
               <div className="flex items-center gap-4">
                 <button 
-                  onClick={() => handleDownloadPdf(selectedMission.id, selectedMission.name)}
-                  className="px-4 py-2 bg-vyoma-primary/10 text-vyoma-primary border border-vyoma-primary/30 hover:bg-vyoma-primary hover:text-black rounded text-xs font-mono font-bold tracking-widest uppercase transition-colors flex items-center gap-2"
+                  onClick={() => handleDownloadPdf(selectedMission.name)}
+                  disabled={loadingDetails}
+                  className="px-4 py-2 bg-vyoma-primary/10 text-vyoma-primary border border-vyoma-primary/30 hover:bg-vyoma-primary hover:text-black rounded text-xs font-mono font-bold tracking-widest uppercase transition-colors flex items-center gap-2 disabled:opacity-50"
                 >
-                  <Download className="w-4 h-4" /> GENERATE PDF
+                  <Download className="w-4 h-4" /> DOWNLOAD PDF
                 </button>
                 <button onClick={closeMissionView} className="text-gray-500 hover:text-white transition-colors p-2">
                   <X className="w-6 h-6" />
@@ -281,69 +298,129 @@ export function MissionArchive() {
               </div>
             </div>
 
-            {/* Modal Content */}
-            <div className="p-6 flex flex-col gap-8">
-              {loadingDetails ? (
-                <div className="p-12 text-center text-vyoma-primary font-mono tracking-widest animate-pulse">LOADING TELEMETRY DATA...</div>
+            {/* Modal Content - THIS IS THE PDF TARGET */}
+            <div ref={reportRef} className="p-8 flex flex-col gap-8 bg-vyoma-dark">
+              {loadingDetails || !missionReport ? (
+                <div className="p-12 text-center text-vyoma-primary font-mono tracking-widest animate-pulse">GENERATING REPORT...</div>
               ) : (
                 <>
-                  {/* Summary Stats Grid */}
+                  {/* VYOMA HEADER */}
+                  <div className="border-b-2 border-vyoma-primary/50 pb-6 mb-2">
+                    <div className="flex justify-between items-center mb-4">
+                      <div>
+                        <h1 className="text-3xl font-bold text-white tracking-widest">VYOMA</h1>
+                        <div className="text-sm text-vyoma-primary font-mono tracking-wider uppercase">Mission Report</div>
+                      </div>
+                      <div className="text-right font-mono">
+                        <div className="text-sm text-gray-300">Generated: {new Date().toLocaleString()}</div>
+                        <div className="text-xs text-gray-500 mt-1 uppercase">MODE: {missionReport.mode}</div>
+                      </div>
+                    </div>
+                    
+                    {/* MISSION INFORMATION */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                      <div>
+                        <div className="text-[10px] text-gray-500 font-mono mb-1 uppercase">Mission Name</div>
+                        <div className="text-sm font-bold text-white">{missionReport.missionInfo.name}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-gray-500 font-mono mb-1 uppercase">Mission ID</div>
+                        <div className="text-sm font-bold text-white">{missionReport.missionInfo.id}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-gray-500 font-mono mb-1 uppercase">Operator</div>
+                        <div className="text-sm font-bold text-white">{missionReport.missionInfo.operator || 'Unknown'}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-gray-500 font-mono mb-1 uppercase">Status</div>
+                        <div className={`text-sm font-bold ${missionReport.missionInfo.status === 'ABORTED' ? 'text-vyoma-critical' : 'text-vyoma-success'}`}>{missionReport.missionInfo.status}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-gray-500 font-mono mb-1 uppercase">Start Time</div>
+                        <div className="text-sm text-gray-300">{new Date(missionReport.missionInfo.start_time).toLocaleString()}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-gray-500 font-mono mb-1 uppercase">End Time</div>
+                        <div className="text-sm text-gray-300">{missionReport.missionInfo.end_time ? new Date(missionReport.missionInfo.end_time).toLocaleString() : '--'}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-gray-500 font-mono mb-1 uppercase">Time of Flight</div>
+                        <div className="text-sm text-gray-300 font-mono">{missionReport.flightSummary.flightTime.toFixed(1)} s</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* FLIGHT SUMMARY & ENVIRONMENTAL */}
                   <div>
-                    <h4 className="text-[10px] text-gray-500 font-mono tracking-widest uppercase mb-4">Mission Telemetry Summary</h4>
+                    <h4 className="text-lg font-bold text-white tracking-widest uppercase mb-4 border-b border-white/10 pb-2">Flight Summary</h4>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                       <div className="glass-panel p-4 border-l-2 border-vyoma-primary">
                         <div className="text-[9px] text-gray-500 font-mono mb-1">MAX ALTITUDE</div>
-                        <div className="text-lg font-bold text-white font-mono">{missionDetails?.stats?.maxAltitude?.toFixed(1) ?? '--'} <span className="text-xs text-gray-500">m</span></div>
+                        <div className="text-lg font-bold text-white font-mono">{missionReport.flightSummary.maxAltitude?.toFixed(1) ?? '--'} <span className="text-xs text-gray-500">m</span></div>
                       </div>
                       <div className="glass-panel p-4 border-l-2 border-vyoma-primary">
                         <div className="text-[9px] text-gray-500 font-mono mb-1">MAX VELOCITY</div>
-                        <div className="text-lg font-bold text-white font-mono">{missionDetails?.stats?.maxVelocity?.toFixed(1) ?? '--'} <span className="text-xs text-gray-500">m/s</span></div>
+                        <div className="text-lg font-bold text-white font-mono">{missionReport.flightSummary.maxVelocity?.toFixed(1) ?? '--'} <span className="text-xs text-gray-500">m/s</span></div>
                       </div>
                       <div className="glass-panel p-4 border-l-2 border-vyoma-primary">
                         <div className="text-[9px] text-gray-500 font-mono mb-1">MAX ACCEL</div>
-                        <div className="text-lg font-bold text-white font-mono">{missionDetails?.stats?.maxAccel?.toFixed(2) ?? '--'} <span className="text-xs text-gray-500">g</span></div>
+                        <div className="text-lg font-bold text-white font-mono">{missionReport.flightSummary.maxAccel?.toFixed(2) ?? '--'} <span className="text-xs text-gray-500">g</span></div>
                       </div>
                       <div className="glass-panel p-4 border-l-2 border-vyoma-primary">
                         <div className="text-[9px] text-gray-500 font-mono mb-1">MAX ANGULAR VEL</div>
-                        <div className="text-lg font-bold text-white font-mono">{missionDetails?.stats?.maxGyro?.toFixed(0) ?? '--'} <span className="text-xs text-gray-500">°/s</span></div>
+                        <div className="text-lg font-bold text-white font-mono">{missionReport.flightSummary.maxGyro?.toFixed(0) ?? '--'} <span className="text-xs text-gray-500">°/s</span></div>
                       </div>
+                      
                       <div className="glass-panel p-4">
                         <div className="text-[9px] text-gray-500 font-mono mb-1">TEMPERATURE (MIN/MAX)</div>
-                        <div className="text-sm font-bold text-white font-mono">{missionDetails?.stats?.minTemp ?? '--'} / {missionDetails?.stats?.maxTemp ?? '--'} <span className="text-xs text-gray-500">°C</span></div>
+                        <div className="text-sm font-bold text-white font-mono">
+                          {missionReport.sensorStatus.dht22 === false ? <span className="text-gray-500">Sensor Not Available</span> : 
+                           `${missionReport.environmentalData.minTemp ?? '--'} / ${missionReport.environmentalData.maxTemp ?? '--'} °C`}
+                        </div>
                       </div>
                       <div className="glass-panel p-4">
                         <div className="text-[9px] text-gray-500 font-mono mb-1">HUMIDITY (MIN/MAX)</div>
-                        <div className="text-sm font-bold text-white font-mono">{missionDetails?.stats?.minHum ?? '--'} / {missionDetails?.stats?.maxHum ?? '--'} <span className="text-xs text-gray-500">%</span></div>
+                        <div className="text-sm font-bold text-white font-mono">
+                           {missionReport.sensorStatus.dht22 === false ? <span className="text-gray-500">Sensor Not Available</span> : 
+                           `${missionReport.environmentalData.minHum ?? '--'} / ${missionReport.environmentalData.maxHum ?? '--'} %`}
+                        </div>
                       </div>
                       <div className="glass-panel p-4">
-                        <div className="text-[9px] text-gray-500 font-mono mb-1">GAS SENSORS (PEAK)</div>
-                        <div className="text-xs font-bold text-vyoma-warning font-mono">MQ09: {missionDetails?.stats?.maxMq09 ?? '--'} | MQ135: {missionDetails?.stats?.maxMq135 ?? '--'}</div>
+                        <div className="text-[9px] text-gray-500 font-mono mb-1">GAS (MQ09/MQ135 PEAK)</div>
+                        <div className="text-sm font-bold text-vyoma-warning font-mono">
+                           {missionReport.gasData.mq09_max ?? '--'} / {missionReport.gasData.mq135_max ?? '--'}
+                        </div>
+                        <div className="text-[8px] text-gray-500 mt-1 uppercase">Raw ADC / Uncalibrated</div>
                       </div>
                       <div className="glass-panel p-4 border-vyoma-critical/30">
-                        <div className="text-[9px] text-vyoma-critical/80 font-mono mb-1">FLAME EVENTS</div>
-                        <div className="text-lg font-bold text-vyoma-critical font-mono">{missionDetails?.flameEvents ?? 0}</div>
+                        <div className="text-[9px] text-vyoma-critical/80 font-mono mb-1">FLAME DETECTIONS</div>
+                        <div className="text-lg font-bold text-vyoma-critical font-mono">
+                           {missionReport.sensorStatus.flame === false ? <span className="text-gray-500 text-xs">Not Available</span> : missionReport.flameData.events}
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   {/* Graphs */}
                   <div>
-                    <h4 className="text-[10px] text-gray-500 font-mono tracking-widest uppercase mb-4">Historical Telemetry Graphs</h4>
-                    {missionTelemetry.length === 0 ? (
+                    <h4 className="text-lg font-bold text-white tracking-widest uppercase mb-4 border-b border-white/10 pb-2">Telemetry Graphs</h4>
+                    {missionReport.telemetry.length === 0 ? (
                       <div className="glass-panel p-8 text-center text-gray-500 font-mono text-sm">NO TELEMETRY DATA RECORDED</div>
                     ) : (
                       <div className="flex flex-col gap-6">
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                          <TelemetryChart data={missionTelemetry} dataKey="altitude" title="Altitude Over Time" unit=" m" colors={['#06b6d4']} />
-                          <TelemetryChart data={missionTelemetry} dataKey="velocity" title="Vertical Velocity Over Time" unit=" m/s" colors={['#f59e0b']} />
+                          <TelemetryChart data={missionReport.telemetry} dataKey="altitude" title="Altitude Over Time" unit=" m" colors={['#06b6d4']} />
+                          <TelemetryChart data={missionReport.telemetry} dataKey="velocity" title="Vertical Velocity Over Time" unit=" m/s" colors={['#f59e0b']} />
                         </div>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                          <TelemetryChart data={missionTelemetry} dataKey={['accel_x', 'accel_y', 'accel_z']} title="Acceleration (X,Y,Z)" colors={['#ef4444', '#22c55e', '#3b82f6']} />
-                          <TelemetryChart data={missionTelemetry} dataKey={['gyro_x', 'gyro_y', 'gyro_z']} title="Angular Velocity (X,Y,Z)" colors={['#ef4444', '#22c55e', '#3b82f6']} />
+                          <TelemetryChart data={missionReport.telemetry} dataKey={['accel_x', 'accel_y', 'accel_z']} title="Acceleration (X,Y,Z)" colors={['#ef4444', '#22c55e', '#3b82f6']} />
+                          <TelemetryChart data={missionReport.telemetry} dataKey={['gyro_x', 'gyro_y', 'gyro_z']} title="Angular Velocity (X,Y,Z)" colors={['#ef4444', '#22c55e', '#3b82f6']} />
                         </div>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                          <TelemetryChart data={missionTelemetry} dataKey="temperature" title="Temperature" unit=" °C" colors={['#ef4444']} />
-                          <TelemetryChart data={missionTelemetry} dataKey={['mq09', 'mq135']} title="Gas Levels (MQ-09, MQ-135)" colors={['#f59e0b', '#3b82f6']} />
+                          {missionReport.sensorStatus.dht22 !== false && <TelemetryChart data={missionReport.telemetry} dataKey="temperature" title="Temperature" unit=" °C" colors={['#ef4444']} />}
+                          {(missionReport.sensorStatus.mq09 !== false || missionReport.sensorStatus.mq135 !== false) && 
+                            <TelemetryChart data={missionReport.telemetry} dataKey={['mq09', 'mq135']} title="Gas Levels (Uncalibrated ADC)" colors={['#f59e0b', '#3b82f6']} />
+                          }
                         </div>
                       </div>
                     )}
@@ -351,14 +428,14 @@ export function MissionArchive() {
                   
                   {/* Timeline */}
                   <div>
-                    <h4 className="text-[10px] text-gray-500 font-mono tracking-widest uppercase mb-4">MISSION EVENTS</h4>
-                    <div className="glass-panel p-6 max-h-[300px] overflow-y-auto font-mono text-sm">
+                    <h4 className="text-lg font-bold text-white tracking-widest uppercase mb-4 border-b border-white/10 pb-2">Mission Events Timeline</h4>
+                    <div className="glass-panel p-6 font-mono text-sm">
                        <div className="flex gap-4 mb-3 pb-3 border-b border-white/5">
-                          <span className="text-gray-500 w-24 shrink-0">{new Date(selectedMission.start_time).toLocaleTimeString()}</span>
+                          <span className="text-gray-500 w-24 shrink-0">{new Date(missionReport.missionInfo.start_time).toLocaleTimeString()}</span>
                           <span className="text-vyoma-primary font-bold">Mission started</span>
                        </div>
                        
-                       {missionAlerts.map(alert => (
+                       {missionReport.missionEvents.map((alert: any) => (
                          <div key={alert.id} className="flex gap-4 mb-3 pb-3 border-b border-white/5">
                             <span className="text-gray-500 w-24 shrink-0">{new Date(alert.timestamp).toLocaleTimeString()}</span>
                             <span className={alert.severity === 'CRITICAL' ? 'text-vyoma-critical font-bold' : 'text-vyoma-warning font-bold'}>
@@ -367,10 +444,10 @@ export function MissionArchive() {
                          </div>
                        ))}
 
-                       {selectedMission.end_time && (
-                         <div className="flex gap-4 mb-3 pb-3 border-b border-white/5">
-                            <span className="text-gray-500 w-24 shrink-0">{new Date(selectedMission.end_time).toLocaleTimeString()}</span>
-                            <span className="text-vyoma-primary font-bold">Mission ended (Status: {selectedMission.status})</span>
+                       {missionReport.missionInfo.end_time && (
+                         <div className="flex gap-4">
+                            <span className="text-gray-500 w-24 shrink-0">{new Date(missionReport.missionInfo.end_time).toLocaleTimeString()}</span>
+                            <span className="text-vyoma-primary font-bold">Mission ended (Final Status: {missionReport.missionInfo.status})</span>
                          </div>
                        )}
                     </div>

@@ -33,27 +33,31 @@ const defaultSettings = {
   }
 };
 
-router.get("/", (req, res) => {
-  db.get("SELECT value FROM sensor_config WHERE key = 'app_settings'", (err, row) => {
-    if (err) return res.status(500).json({ error: "DB Error" });
+router.get("/", async (req, res) => {
+  try {
+    const row = await db.get("SELECT setting_value FROM global_settings WHERE setting_key = 'app_settings'");
     if (!row) {
       return res.json(defaultSettings);
     }
     try {
-      res.json(JSON.parse(row.value));
+      res.json(JSON.parse(row.setting_value));
     } catch (e) {
       res.json(defaultSettings);
     }
-  });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "DB Error" });
+  }
 });
 
-router.put("/", (req, res) => {
+router.put("/", async (req, res) => {
   const updates = req.body || {};
   
-  db.get("SELECT value FROM sensor_config WHERE key = 'app_settings'", (err, row) => {
+  try {
+    const row = await db.get("SELECT setting_value FROM global_settings WHERE setting_key = 'app_settings'");
     let current = { ...defaultSettings };
     if (row) {
-      try { current = JSON.parse(row.value); } catch(e){}
+      try { current = JSON.parse(row.setting_value); } catch(e){}
     }
     
     if (updates.mode) current.mode = updates.mode;
@@ -62,14 +66,17 @@ router.put("/", (req, res) => {
     if (updates.pressure) current.pressure = { ...current.pressure, ...updates.pressure };
     if (updates.thresholds) current.thresholds = { ...current.thresholds, ...updates.thresholds };
 
-    db.run("INSERT OR REPLACE INTO sensor_config (id, key, value) VALUES ((SELECT id FROM sensor_config WHERE key = 'app_settings'), 'app_settings', ?)", 
-      [JSON.stringify(current)], 
-      (err) => {
-        if (err) return res.status(500).json({ error: "DB Error" });
-        res.json(current);
-      }
+    // MySQL INSERT ON DUPLICATE KEY UPDATE equivalent to INSERT OR REPLACE
+    await db.run(
+      "INSERT INTO global_settings (setting_key, setting_value) VALUES ('app_settings', ?) ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value", 
+      [JSON.stringify(current)]
     );
-  });
+    
+    res.json(current);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "DB Error" });
+  }
 });
 
 module.exports = router;
